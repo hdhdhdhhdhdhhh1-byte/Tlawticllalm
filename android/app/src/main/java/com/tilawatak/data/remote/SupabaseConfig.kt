@@ -1,5 +1,7 @@
 package com.tilawatak.data.remote
 
+import com.tilawatak.lilalam.BuildConfig
+
 enum class DataSourceMode {
     MOCK,
     SUPABASE
@@ -20,10 +22,18 @@ object SupabaseConfig {
     var currentMode: DataSourceMode = DataSourceMode.SUPABASE
 
     @Volatile
-    var supabaseUrl: String = DEFAULT_SUPABASE_URL
+    var supabaseUrl: String = try {
+        BuildConfig.SUPABASE_URL.ifBlank { DEFAULT_SUPABASE_URL }
+    } catch (e: Throwable) {
+        DEFAULT_SUPABASE_URL
+    }
 
     @Volatile
-    var supabaseAnonKey: String = DEFAULT_ANON_KEY
+    var supabaseAnonKey: String = try {
+        BuildConfig.SUPABASE_ANON_KEY.ifBlank { DEFAULT_ANON_KEY }
+    } catch (e: Throwable) {
+        DEFAULT_ANON_KEY
+    }
 
     val restBaseUrl: String
         get() = "$supabaseUrl/rest/v1"
@@ -54,3 +64,4 @@ object SupabaseConfig {
         return "$storageBaseUrl/object/public/${SupabaseContracts.BUCKET_PROFILE_IMAGES}/$avatarPath"
     }
 }
+

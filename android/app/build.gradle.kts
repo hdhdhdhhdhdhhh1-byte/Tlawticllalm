@@ -1,9 +1,33 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt.android)
 }
+
+val localProperties = Properties().apply {
+    val rootLocalProperties = rootProject.file("local.properties")
+    val projectLocalProperties = project.file("local.properties")
+    val parentLocalProperties = rootProject.file("../local.properties")
+    when {
+        rootLocalProperties.exists() -> load(FileInputStream(rootLocalProperties))
+        projectLocalProperties.exists() -> load(FileInputStream(projectLocalProperties))
+        parentLocalProperties.exists() -> load(FileInputStream(parentLocalProperties))
+    }
+}
+
+val configuredSupabaseUrl = localProperties.getProperty("SUPABASE_URL")
+    ?: System.getenv("SUPABASE_URL")
+    ?: System.getenv("VITE_SUPABASE_URL")
+    ?: "https://ixkganrxtkywypvqkqkn.supabase.co"
+
+val configuredSupabaseAnonKey = localProperties.getProperty("SUPABASE_ANON_KEY")
+    ?: System.getenv("SUPABASE_ANON_KEY")
+    ?: System.getenv("VITE_SUPABASE_ANON_KEY")
+    ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4a2dhbnJ4dGt5d3lwdnFrcWtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3MjM3OTYsImV4cCI6MjEwMjI5OTc5Nn0.SPHzwpfZpCpo6vrbKZ5wjiPlQE9e7UTMEbPcZGZ7gRQ"
 
 android {
     namespace = "com.tilawatak.lilalam"
@@ -20,6 +44,9 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField("String", "SUPABASE_URL", "\"$configuredSupabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$configuredSupabaseAnonKey\"")
     }
 
     buildTypes {
@@ -43,6 +70,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

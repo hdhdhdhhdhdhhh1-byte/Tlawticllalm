@@ -1,6 +1,5 @@
 package com.tilawatak.data.remote.repository
 
-import com.tilawatak.data.mock.MockData
 import com.tilawatak.data.remote.SupabaseContracts
 import com.tilawatak.data.remote.dto.SupabaseDtoMappers
 import com.tilawatak.data.remote.http.SupabaseHttpClient
@@ -9,10 +8,7 @@ import com.tilawatak.domain.model.Reciter
 import com.tilawatak.domain.repository.IStatisticsRepository
 import org.json.JSONArray
 
-class SupabaseStatisticsRepository(
-    private val fallbackReciters: List<Reciter> = MockData.RECITERS,
-    private val fallbackRecitations: List<Recitation> = MockData.RECITATIONS
-) : IStatisticsRepository {
+class SupabaseStatisticsRepository : IStatisticsRepository {
 
     override suspend fun getMostListenedRecitations(limit: Int): Result<List<Recitation>> {
         val queryParams = mapOf(
@@ -27,9 +23,7 @@ class SupabaseStatisticsRepository(
             for (i in 0 until jsonArray.length()) {
                 list.add(SupabaseDtoMappers.mapJsonToRecitation(jsonArray.getJSONObject(i)))
             }
-            if (list.isNotEmpty()) list else fallbackRecitations.sortedByDescending { it.listenCount }.take(limit)
-        }.recoverCatching {
-            fallbackRecitations.sortedByDescending { it.listenCount }.take(limit)
+            list
         }
     }
 
@@ -46,9 +40,7 @@ class SupabaseStatisticsRepository(
             for (i in 0 until jsonArray.length()) {
                 list.add(SupabaseDtoMappers.mapJsonToRecitation(jsonArray.getJSONObject(i)))
             }
-            if (list.isNotEmpty()) list else fallbackRecitations.sortedByDescending { it.likeCount }.take(limit)
-        }.recoverCatching {
-            fallbackRecitations.sortedByDescending { it.likeCount }.take(limit)
+            list
         }
     }
 
@@ -65,9 +57,7 @@ class SupabaseStatisticsRepository(
             for (i in 0 until jsonArray.length()) {
                 list.add(SupabaseDtoMappers.mapJsonToReciter(jsonArray.getJSONObject(i)))
             }
-            if (list.isNotEmpty()) list else fallbackReciters.sortedByDescending { it.stats.totalListens }.take(limit)
-        }.recoverCatching {
-            fallbackReciters.sortedByDescending { it.stats.totalListens }.take(limit)
+            list
         }
     }
 
@@ -84,9 +74,7 @@ class SupabaseStatisticsRepository(
             for (i in 0 until jsonArray.length()) {
                 list.add(SupabaseDtoMappers.mapJsonToReciter(jsonArray.getJSONObject(i)))
             }
-            if (list.isNotEmpty()) list else fallbackReciters.sortedByDescending { it.stats.totalLikes }.take(limit)
-        }.recoverCatching {
-            fallbackReciters.sortedByDescending { it.stats.totalLikes }.take(limit)
+            list
         }
     }
 
@@ -103,9 +91,8 @@ class SupabaseStatisticsRepository(
             for (i in 0 until jsonArray.length()) {
                 list.add(SupabaseDtoMappers.mapJsonToRecitation(jsonArray.getJSONObject(i)))
             }
-            if (list.isNotEmpty()) list else fallbackRecitations.sortedByDescending { it.publishedAtEpochMs }.take(limit)
-        }.recoverCatching {
-            fallbackRecitations.sortedByDescending { it.publishedAtEpochMs }.take(limit)
+            list
         }
     }
 }
+

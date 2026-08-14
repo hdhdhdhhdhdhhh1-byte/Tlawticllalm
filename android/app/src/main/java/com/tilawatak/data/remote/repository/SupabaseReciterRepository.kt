@@ -1,6 +1,5 @@
 package com.tilawatak.data.remote.repository
 
-import com.tilawatak.data.mock.MockData
 import com.tilawatak.data.remote.SupabaseContracts
 import com.tilawatak.data.remote.dto.SupabaseDtoMappers
 import com.tilawatak.data.remote.http.SupabaseHttpClient
@@ -20,7 +19,7 @@ class SupabaseReciterRepository(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) : IReciterRepository {
 
-    private val _recitersFlow = MutableStateFlow<List<Reciter>>(MockData.RECITERS)
+    private val _recitersFlow = MutableStateFlow<List<Reciter>>(emptyList())
 
     init {
         refreshReciters()
@@ -30,15 +29,17 @@ class SupabaseReciterRepository(
         scope.launch {
             val result = fetchPublicReciters()
             result.onSuccess { list ->
-                if (list.isNotEmpty()) {
-                    _recitersFlow.value = list
-                }
+                _recitersFlow.value = list
             }
         }
     }
 
     override fun getRecitersStream(): Flow<List<Reciter>> {
         return _recitersFlow.asStateFlow()
+    }
+
+    suspend fun testConnection(): Result<List<Reciter>> {
+        return fetchPublicReciters(mapOf("limit" to "5"))
     }
 
     private suspend fun fetchPublicReciters(params: Map<String, String> = emptyMap()): Result<List<Reciter>> {
@@ -56,9 +57,6 @@ class SupabaseReciterRepository(
                 list.add(SupabaseDtoMappers.mapJsonToReciter(obj))
             }
             list
-        }.recoverCatching {
-            // Fallback gracefully to memory state or mock data if network offline
-            _recitersFlow.value
         }
     }
 
@@ -74,10 +72,8 @@ class SupabaseReciterRepository(
             if (jsonArray.length() > 0) {
                 SupabaseDtoMappers.mapJsonToReciter(jsonArray.getJSONObject(0))
             } else {
-                _recitersFlow.value.find { it.id == id }
+                null
             }
-        }.recoverCatching {
-            _recitersFlow.value.find { it.id == id }
         }
     }
 
@@ -94,15 +90,13 @@ class SupabaseReciterRepository(
             for (i in 0 until jsonArray.length()) {
                 list.add(SupabaseDtoMappers.mapJsonToReciter(jsonArray.getJSONObject(i)))
             }
-            if (list.isNotEmpty()) list else _recitersFlow.value.filter { it.isStaffPick || it.verified }
-        }.recoverCatching {
-            _recitersFlow.value.filter { it.isStaffPick || it.verified }
+            list
         }
     }
 
     override suspend fun searchReciters(query: String): Result<List<Reciter>> {
         val trimmed = query.trim()
-        if (trimmed.isEmpty()) return Result.success(_recitersFlow.value)
+        if (trimmed.isEmpty()) return fetchPublicReciters()
 
         val rpcBody = JSONObject().apply {
             put("search_term", trimmed)
@@ -115,14 +109,6 @@ class SupabaseReciterRepository(
                 list.add(SupabaseDtoMappers.mapJsonToReciter(jsonArray.getJSONObject(i)))
             }
             list
-        }.recoverCatching {
-            // Local fallback filter
-            val q = trimmed.lowercase()
-            _recitersFlow.value.filter {
-                it.displayName.lowercase().contains(q) ||
-                        (it.pseudonym?.lowercase()?.contains(q) == true) ||
-                        it.country.lowercase().contains(q)
-            }
         }
     }
 
@@ -139,9 +125,8 @@ class SupabaseReciterRepository(
             for (i in 0 until jsonArray.length()) {
                 list.add(SupabaseDtoMappers.mapJsonToReciter(jsonArray.getJSONObject(i)))
             }
-            if (list.isNotEmpty()) list else _recitersFlow.value.sortedByDescending { it.createdAtEpochMs }.take(limit)
-        }.recoverCatching {
-            _recitersFlow.value.sortedByDescending { it.createdAtEpochMs }.take(limit)
+            list
         }
     }
 }
+

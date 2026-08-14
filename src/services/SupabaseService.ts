@@ -3,9 +3,13 @@
  * Uses public anon key and project URL.
  */
 
+const liveAnonKey =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4a2dhbnJ4dGt5d3lwdnFrcWtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3MjM3OTYsImV4cCI6MjEwMjI5OTc5Nn0.SPHzwpfZpCpo6vrbKZ5wjiPlQE9e7UTMEbPcZGZ7gRQ';
+
 export const SUPABASE_CONFIG = {
   url: 'https://ixkganrxtkywypvqkqkn.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4a2dhbnJ4dGt5d3lwdnFrcWtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDQwNjcyMDAsImV4cCI6MjAyNTY0MzIwMH0.placeholder',
+  anonKey: liveAnonKey,
   restBaseUrl: 'https://ixkganrxtkywypvqkqkn.supabase.co/rest/v1',
   storageBaseUrl: 'https://ixkganrxtkywypvqkqkn.supabase.co/storage/v1'
 };

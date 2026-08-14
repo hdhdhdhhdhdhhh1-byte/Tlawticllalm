@@ -25,10 +25,8 @@ class SupabaseRecitationRepository(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) : IRecitationRepository {
 
-    private val userLikedIds = mutableSetOf("rec-2", "rec-3", "rec-8")
-    private val _recitationsFlow = MutableStateFlow<List<Recitation>>(
-        MockData.RECITATIONS.map { r -> r.copy(isLiked = userLikedIds.contains(r.id)) }
-    )
+    private val userLikedIds = mutableSetOf<String>()
+    private val _recitationsFlow = MutableStateFlow<List<Recitation>>(emptyList())
 
     init {
         refreshRecitations()
@@ -38,9 +36,7 @@ class SupabaseRecitationRepository(
         scope.launch {
             val result = fetchPublicRecitations()
             result.onSuccess { list ->
-                if (list.isNotEmpty()) {
-                    _recitationsFlow.value = list
-                }
+                _recitationsFlow.value = list
             }
         }
     }
@@ -66,8 +62,6 @@ class SupabaseRecitationRepository(
                 list.add(SupabaseDtoMappers.mapJsonToRecitation(obj, isLiked))
             }
             list
-        }.recoverCatching {
-            _recitationsFlow.value
         }
     }
 
@@ -91,17 +85,7 @@ class SupabaseRecitationRepository(
                 val isLiked = userLikedIds.contains(id)
                 list.add(SupabaseDtoMappers.mapJsonToRecitation(obj, isLiked))
             }
-            if (list.isNotEmpty()) {
-                list
-            } else {
-                _recitationsFlow.value
-                    .filter { it.reciterId == reciterId && it.status == SubmissionStatus.APPROVED }
-                    .sortedByDescending { it.publishedAtEpochMs }
-            }
-        }.recoverCatching {
-            _recitationsFlow.value
-                .filter { it.reciterId == reciterId && it.status == SubmissionStatus.APPROVED }
-                .sortedByDescending { it.publishedAtEpochMs }
+            list
         }
     }
 

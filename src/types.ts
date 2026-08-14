@@ -91,6 +91,100 @@ export interface SurahMeta {
 
 export type NavigationTab = 'home' | 'listen' | 'submit' | 'featured' | 'about';
 
+export type AdminTab = 
+  | 'dashboard'
+  | 'submissions'
+  | 'reciters'
+  | 'recitations'
+  | 'announcements'
+  | 'competitions'
+  | 'rewards'
+  | 'notifications'
+  | 'statistics';
+
+export type AdminRole = 'SUPER_ADMIN' | 'CONTENT_REVIEWER' | 'AUDITOR';
+
+export interface AdminProfile {
+  id: string;
+  email: string;
+  fullName: string;
+  role: AdminRole;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AdminAuthState {
+  isAuthenticated: boolean;
+  token: string | null;
+  admin: AdminProfile | null;
+}
+
+export interface AdminDashboardStats {
+  totalReciters: number;
+  publishedReciters: number;
+  totalRecitations: number;
+  publishedRecitations: number;
+  pendingSubmissions: number;
+  totalListens: number;
+  totalLikes: number;
+  activeCompetitions: number;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  imagePath?: string;
+  isPublished: boolean;
+  publishedAt?: string;
+  createdAt: string;
+}
+
+export interface Competition {
+  id: string;
+  title: string;
+  description: string;
+  imagePath?: string;
+  startAt: string;
+  endAt: string;
+  isPublished: boolean;
+  createdAt: string;
+}
+
+export type HonorCategory = 'TAJWEED_EXCELLENCE' | 'COMMUNITY_FAVORITE' | 'MILESTONE_COMPLETION' | 'EDITORIAL_HONOR';
+
+export interface RewardDefinition {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  category: HonorCategory;
+  badgeIconPath?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ReciterHonor {
+  id: string;
+  reciterId: string;
+  rewardId: string;
+  awardedAt: string;
+  awardedBy?: string;
+  citationNote?: string;
+  reward?: RewardDefinition;
+}
+
+export interface AdminNotification {
+  id: string;
+  notificationType: string;
+  title: string;
+  content: string;
+  referenceId?: string;
+  isRead: boolean;
+  sentViaEmail?: boolean;
+  createdAt: string;
+}
+
 export type DiscoveryFilter = 'all' | 'popular' | 'most_liked' | 'latest' | 'staff_picks' | 'new_reciters';
 
 export interface PlayerState {

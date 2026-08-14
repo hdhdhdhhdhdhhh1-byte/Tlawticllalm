@@ -58,26 +58,37 @@ class ListenViewModel(
                 val featuredRecitersResult = reciterRepository.getFeaturedReciters()
                 val newestRecitersResult = reciterRepository.getNewestReciters(10)
 
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        mostListenedRecitations = mostListenedResult.getOrDefault(emptyList()),
-                        mostLikedRecitations = mostLikedResult.getOrDefault(emptyList()),
-                        newestRecitations = newestRecitationsResult.getOrDefault(emptyList()),
-                        featuredReciters = featuredRecitersResult.getOrDefault(emptyList()),
-                        newestReciters = newestRecitersResult.getOrDefault(emptyList())
-                    )
+                if (mostListenedResult.isFailure && featuredRecitersResult.isFailure) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "تعذر الاتصال بقاعدة البيانات\nتحقق من اتصال الإنترنت وحاول مرة أخرى"
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            mostListenedRecitations = mostListenedResult.getOrDefault(emptyList()),
+                            mostLikedRecitations = mostLikedResult.getOrDefault(emptyList()),
+                            newestRecitations = newestRecitationsResult.getOrDefault(emptyList()),
+                            featuredReciters = featuredRecitersResult.getOrDefault(emptyList()),
+                            newestReciters = newestRecitersResult.getOrDefault(emptyList()),
+                            errorMessage = null
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = e.localizedMessage ?: "حدث خطأ، حاول مرة أخرى"
+                        errorMessage = "تعذر الاتصال بقاعدة البيانات\nتحقق من اتصال الإنترنت وحاول مرة أخرى"
                     )
                 }
             }
         }
     }
+
 
     fun onSearchQueryChanged(query: String) {
         _uiState.update { it.copy(searchQuery = query) }

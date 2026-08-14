@@ -27,6 +27,11 @@ CREATE OR REPLACE FUNCTION record_listen_event(
 )
 RETURNS VOID AS $$
 BEGIN
+    -- Validate parameters
+    IF p_recitation_id IS NULL OR p_anonymous_installation_id IS NULL OR TRIM(p_anonymous_installation_id) = '' THEN
+        RETURN;
+    END IF;
+
     -- Only persist meaningful listening durations (e.g., at least 5 seconds or completion)
     IF p_listened_seconds >= 5 OR p_completed = TRUE THEN
         INSERT INTO listen_events (
@@ -37,9 +42,9 @@ BEGIN
         ) VALUES (
             p_recitation_id,
             p_anonymous_installation_id,
-            p_listened_seconds,
-            p_completed
+            GREATEST(COALESCE(p_listened_seconds, 0), 0),
+            COALESCE(p_completed, FALSE)
         );
     END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;

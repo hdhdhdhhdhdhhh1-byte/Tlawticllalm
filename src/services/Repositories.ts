@@ -6,6 +6,22 @@ import {
   LikeResult
 } from '../types';
 import { MOCK_RECITERS, MOCK_RECITATIONS, INITIAL_SUBMISSIONS } from '../data/mockData';
+import { SupabaseService } from './SupabaseService';
+
+export enum DataSourceMode {
+  MOCK = 'MOCK',
+  SUPABASE = 'SUPABASE'
+}
+
+let currentDataSourceMode: DataSourceMode = DataSourceMode.SUPABASE;
+
+export function getDataSourceMode(): DataSourceMode {
+  return currentDataSourceMode;
+}
+
+export function setDataSourceMode(mode: DataSourceMode) {
+  currentDataSourceMode = mode;
+}
 
 // ============================================================================
 // DOMAIN REPOSITORY INTERFACES (Clean Architecture - Backend Agnostic)
@@ -59,17 +75,17 @@ export interface ISubmissionRepository {
 }
 
 // ============================================================================
-// IN-MEMORY / CLIENT-SIDE REPOSITORY IMPLEMENTATIONS (Prototype / Mock Data)
+// HYBRID REPOSITORY IMPLEMENTATION (SUPABASE + MOCK FALLBACK)
 // ============================================================================
 
-class InMemoryReciterRepository implements IReciterRepository {
+class HybridReciterRepository implements IReciterRepository {
   private reciters: Reciter[] = [...MOCK_RECITERS];
   private listeners: Set<(reciters: Reciter[]) => void> = new Set();
 
   getRecitersStream(onUpdate?: (reciters: Reciter[]) => void): () => void {
     if (onUpdate) {
       this.listeners.add(onUpdate);
-      onUpdate([...this.reciters]);
+      this.getAllReciters().then((list) => onUpdate(list));
     }
     return () => {
       if (onUpdate) this.listeners.delete(onUpdate);
@@ -77,21 +93,48 @@ class InMemoryReciterRepository implements IReciterRepository {
   }
 
   async getAllReciters(): Promise<Reciter[]> {
+    if (currentDataSourceMode === DataSourceMode.SUPABASE) {
+      const data = await SupabaseService.fetchPublicReciters();
+      if (data && Array.isArray(data) && data.length > 0) {
+        return data.map((d: any) => ({
+          id: d.id,
+          displayName: d.display_name,
+          pseudonym: d.pseudonym,
+          isAnonymous: d.use_pseudonym,
+          gender: (d.gender?.toLowerCase() === 'female' ? 'female' : 'male'),
+          country: d.country,
+          countryCode: d.country_code || 'SA',
+          bio: d.bio || '',
+          avatarUrl: d.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&crop=face',
+          verified: !!d.is_verified,
+          isStaffPick: !!d.is_staff_pick,
+          stats: {
+            totalRecitations: d.total_recitations || 0,
+            totalListens: d.total_listens || 0,
+            totalLikes: d.total_likes || 0
+          },
+          createdAt: d.created_at || new Date().toISOString()
+        }));
+      }
+    }
     return [...this.reciters];
   }
 
   async getReciterById(id: string): Promise<Reciter | null> {
-    return this.reciters.find((r) => r.id === id) || null;
+    const list = await this.getAllReciters();
+    return list.find((r) => r.id === id) || null;
   }
 
   async getFeaturedReciters(): Promise<Reciter[]> {
-    return this.reciters.filter((r) => r.isStaffPick || r.verified);
+    const list = await this.getAllReciters();
+    return list.filter((r) => r.isStaffPick || r.verified);
   }
 
   async searchReciters(query: string): Promise<Reciter[]> {
+    const list = await this.getAllReciters();
     const q = query.trim().toLowerCase();
-    if (!q) return [...this.reciters];
-    return this.reciters.filter(
+    if (!q) return list;
+    return list.filter(
       (r) =>
         r.displayName.toLowerCase().includes(q) ||
         r.country.toLowerCase().includes(q) ||
@@ -100,22 +143,20 @@ class InMemoryReciterRepository implements IReciterRepository {
   }
 
   async getNewestReciters(limit: number = 10): Promise<Reciter[]> {
-    return [...this.reciters]
+    const list = await this.getAllReciters();
+    return [...list]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, limit);
   }
 }
 
-class InMemoryRecitationRepository implements IRecitationRepository {
+class HybridRecitationRepository implements IRecitationRepository {
   private recitations: Recitation[] = [...MOCK_RECITATIONS];
-  // User-specific like tracking: tracks (userId + recitationId) to prevent unlimited likes
   private userLikesMap: Map<string, Set<string>> = new Map();
-  // Listen events recorded for backend ingestion
   private recordedEvents: ListenEvent[] = [];
   private listeners: Set<(recitations: Recitation[]) => void> = new Set();
 
   constructor() {
-    // Seed default user likes for demo session
     const defaultUserId = 'user_current';
     const seedLikes = new Set(['rec-2', 'rec-3', 'rec-8']);
     this.userLikesMap.set(defaultUserId, seedLikes);
@@ -129,7 +170,7 @@ class InMemoryRecitationRepository implements IRecitationRepository {
   getRecitationsStream(onUpdate?: (recitations: Recitation[]) => void): () => void {
     if (onUpdate) {
       this.listeners.add(onUpdate);
-      onUpdate([...this.recitations]);
+      this.getAllRecitations().then((list) => onUpdate(list));
     }
     return () => {
       if (onUpdate) this.listeners.delete(onUpdate);
@@ -142,17 +183,97 @@ class InMemoryRecitationRepository implements IRecitationRepository {
   }
 
   async getAllRecitations(): Promise<Recitation[]> {
+    if (currentDataSourceMode === DataSourceMode.SUPABASE) {
+      const data = await SupabaseService.fetchPublicRecitations();
+      if (data && Array.isArray(data) && data.length > 0) {
+        const userLikes = this.userLikesMap.get('user_current') || new Set();
+        return data.map((d: any) => ({
+          id: d.id,
+          reciterId: d.reciter_id,
+          reciterName: d.reciter_name,
+          reciterAvatar: d.reciter_avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&crop=face',
+          reciterCountry: d.reciter_country,
+          surahNumber: d.surah_number,
+          surahNameArabic: d.surah_name_arabic,
+          surahNameEnglish: d.surah_name_english || '',
+          ayahRange: d.ayah_range || 'كاملة',
+          riwayah: d.riwayah || 'حفص عن عاصم',
+          duration: d.duration_seconds || 180,
+          durationFormatted: `${Math.floor((d.duration_seconds || 180) / 60).toString().padStart(2, '0')}:${((d.duration_seconds || 180) % 60).toString().padStart(2, '0')}`,
+          audioUrl: d.audio_url || 'https://server8.mp3quran.net/afs/001.mp3',
+          coverUrl: d.cover_image_path || undefined,
+          listenCount: d.listen_count || 0,
+          likeCount: d.like_count || 0,
+          isLiked: userLikes.has(d.id),
+          isStaffPick: !!d.is_staff_pick,
+          description: d.description || '',
+          createdAt: d.published_at || new Date().toISOString()
+        }));
+      }
+    }
     return [...this.recitations];
   }
 
+  /**
+   * Reciter profile recitations must be ordered strictly by published_at DESC (newest published first).
+   */
   async getRecitationsByReciter(reciterId: string): Promise<Recitation[]> {
-    return this.recitations.filter((r) => r.reciterId === reciterId);
+    if (currentDataSourceMode === DataSourceMode.SUPABASE) {
+      const data = await SupabaseService.fetchPublicRecitations(reciterId);
+      if (data && Array.isArray(data) && data.length > 0) {
+        const userLikes = this.userLikesMap.get('user_current') || new Set();
+        return data.map((d: any) => ({
+          id: d.id,
+          reciterId: d.reciter_id,
+          reciterName: d.reciter_name,
+          reciterAvatar: d.reciter_avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&crop=face',
+          reciterCountry: d.reciter_country,
+          surahNumber: d.surah_number,
+          surahNameArabic: d.surah_name_arabic,
+          surahNameEnglish: d.surah_name_english || '',
+          ayahRange: d.ayah_range || 'كاملة',
+          riwayah: d.riwayah || 'حفص عن عاصم',
+          duration: d.duration_seconds || 180,
+          durationFormatted: `${Math.floor((d.duration_seconds || 180) / 60).toString().padStart(2, '0')}:${((d.duration_seconds || 180) % 60).toString().padStart(2, '0')}`,
+          audioUrl: d.audio_url || 'https://server8.mp3quran.net/afs/001.mp3',
+          coverUrl: d.cover_image_path || undefined,
+          listenCount: d.listen_count || 0,
+          likeCount: d.like_count || 0,
+          isLiked: userLikes.has(d.id),
+          isStaffPick: !!d.is_staff_pick,
+          description: d.description || '',
+          createdAt: d.published_at || new Date().toISOString()
+        }));
+      }
+    }
+    return this.recitations
+      .filter((r) => r.reciterId === reciterId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  /**
-   * Conceptually user-specific: prevents unlimited like spam by toggling state per userId.
-   */
   async toggleLike(recitationId: string, userId: string = 'user_current'): Promise<LikeResult> {
+    if (currentDataSourceMode === DataSourceMode.SUPABASE) {
+      const rpcResult = await SupabaseService.toggleLike(recitationId, userId);
+      if (rpcResult) {
+        const isLiked = !!rpcResult.v_new_state;
+        const count = Number(rpcResult.v_count) || 0;
+        let userLikes = this.userLikesMap.get(userId);
+        if (!userLikes) {
+          userLikes = new Set();
+          this.userLikesMap.set(userId, userLikes);
+        }
+        if (isLiked) userLikes.add(recitationId); else userLikes.delete(recitationId);
+
+        const recitation = this.recitations.find((r) => r.id === recitationId);
+        if (recitation) {
+          recitation.isLiked = isLiked;
+          recitation.likeCount = count;
+        }
+        this.notifyListeners();
+        return { isLiked, likeCount: count };
+      }
+    }
+
     let userLikes = this.userLikesMap.get(userId);
     if (!userLikes) {
       userLikes = new Set<string>();
@@ -168,12 +289,10 @@ class InMemoryRecitationRepository implements IRecitationRepository {
     const isCurrentlyLiked = userLikes.has(recitationId);
 
     if (isCurrentlyLiked) {
-      // User unlikes
       userLikes.delete(recitationId);
       recitation.likeCount = Math.max(0, recitation.likeCount - 1);
       recitation.isLiked = false;
     } else {
-      // User likes
       userLikes.add(recitationId);
       recitation.likeCount += 1;
       recitation.isLiked = true;
@@ -186,9 +305,6 @@ class InMemoryRecitationRepository implements IRecitationRepository {
     };
   }
 
-  /**
-   * Listen events are logged as domain events for future backend pipeline ingestion.
-   */
   async recordListenEvent(event: ListenEvent): Promise<void> {
     const validEvent: ListenEvent = {
       ...event,
@@ -196,7 +312,15 @@ class InMemoryRecitationRepository implements IRecitationRepository {
     };
     this.recordedEvents.push(validEvent);
 
-    // Increment local in-memory count for prototype preview
+    if (currentDataSourceMode === DataSourceMode.SUPABASE) {
+      await SupabaseService.recordListenEvent(
+        event.recitationId,
+        'user_current',
+        event.durationSeconds || 5,
+        event.completed || false
+      );
+    }
+
     const recitation = this.recitations.find((r) => r.id === event.recitationId);
     if (recitation) {
       recitation.listenCount += 1;
@@ -205,7 +329,7 @@ class InMemoryRecitationRepository implements IRecitationRepository {
   }
 }
 
-class InMemoryStatisticsRepository implements IStatisticsRepository {
+class HybridStatisticsRepository implements IStatisticsRepository {
   private recitationRepo: IRecitationRepository;
   private reciterRepo: IReciterRepository;
 
@@ -242,7 +366,7 @@ class InMemoryStatisticsRepository implements IStatisticsRepository {
   }
 }
 
-class InMemorySubmissionRepository implements ISubmissionRepository {
+class HybridSubmissionRepository implements ISubmissionRepository {
   private submissions: RecitationSubmission[] = [...INITIAL_SUBMISSIONS];
   private listeners: Set<(subs: RecitationSubmission[]) => void> = new Set();
 
@@ -253,13 +377,32 @@ class InMemorySubmissionRepository implements ISubmissionRepository {
   async submitRecitation(
     data: Omit<RecitationSubmission, 'id' | 'submittedAt' | 'status'>
   ): Promise<RecitationSubmission> {
+    const submissionId = `sub-${Date.now()}`;
     const newSubmission: RecitationSubmission = {
       ...data,
-      id: `sub-${Date.now()}`,
+      id: submissionId,
       submittedAt: new Date().toISOString(),
       status: 'pending',
       adminNotes: 'تم استلام طلبكم وهو قيد المراجعة والتدقيق الصوتي والتجويدي من قبل الإدارة.'
     };
+
+    if (currentDataSourceMode === DataSourceMode.SUPABASE) {
+      await SupabaseService.submitRecitation({
+        display_name: data.displayName,
+        pseudonym: data.pseudonym || null,
+        use_pseudonym: data.usePseudonym,
+        gender: data.gender.toUpperCase(),
+        country: data.country,
+        surah_number: data.surahNumber,
+        surah_name: data.surahName,
+        ayah_range: data.ayahRange,
+        riwayah: data.riwayah,
+        description: data.description,
+        audio_storage_path: `submissions/${submissionId}.mp3`,
+        audio_duration_seconds: data.audioDuration,
+        status: 'PENDING'
+      });
+    }
 
     this.submissions.unshift(newSubmission);
     this.listeners.forEach((listener) => listener([...this.submissions]));
@@ -271,10 +414,11 @@ class InMemorySubmissionRepository implements ISubmissionRepository {
 // SINGLETON REPOSITORY INSTANCES (Dependency Injection)
 // ============================================================================
 
-export const reciterRepository: IReciterRepository = new InMemoryReciterRepository();
-export const recitationRepository: IRecitationRepository = new InMemoryRecitationRepository();
-export const statisticsRepository: IStatisticsRepository = new InMemoryStatisticsRepository(
+export const reciterRepository: IReciterRepository = new HybridReciterRepository();
+export const recitationRepository: IRecitationRepository = new HybridRecitationRepository();
+export const statisticsRepository: IStatisticsRepository = new HybridStatisticsRepository(
   recitationRepository,
   reciterRepository
 );
-export const submissionRepository: ISubmissionRepository = new InMemorySubmissionRepository();
+export const submissionRepository: ISubmissionRepository = new HybridSubmissionRepository();
+

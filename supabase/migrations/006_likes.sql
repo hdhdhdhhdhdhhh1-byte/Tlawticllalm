@@ -30,6 +30,11 @@ DECLARE
     v_new_state BOOLEAN;
     v_count BIGINT;
 BEGIN
+    -- Validate parameters
+    IF p_recitation_id IS NULL OR p_anonymous_installation_id IS NULL OR TRIM(p_anonymous_installation_id) = '' THEN
+        RAISE EXCEPTION 'Invalid parameters: recitation_id and anonymous_installation_id are required';
+    END IF;
+
     SELECT EXISTS (
         SELECT 1 FROM likes
         WHERE recitation_id = p_recitation_id
@@ -54,4 +59,4 @@ BEGIN
 
     RETURN QUERY SELECT v_new_state, v_count;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;

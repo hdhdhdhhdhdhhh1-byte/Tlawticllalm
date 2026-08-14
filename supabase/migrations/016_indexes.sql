@@ -39,4 +39,4 @@ BEGIN
        OR country ILIKE '%' || search_term || '%'
        OR bio ILIKE '%' || search_term || '%';
 END;
-$$ LANGUAGE plpgsql STABLE;
+$$ LANGUAGE plpgsql STABLE SET search_path = public, pg_temp;

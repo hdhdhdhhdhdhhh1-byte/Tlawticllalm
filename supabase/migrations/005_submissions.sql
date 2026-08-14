@@ -41,7 +41,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 CREATE TRIGGER trg_submissions_enforce_pending
     BEFORE INSERT ON recitation_submissions

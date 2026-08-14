@@ -24,7 +24,7 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public, pg_temp;
 
 CREATE TRIGGER trg_admin_profiles_updated_at
     BEFORE UPDATE ON admin_profiles
@@ -42,4 +42,4 @@ BEGIN
           AND is_active = TRUE
     );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;

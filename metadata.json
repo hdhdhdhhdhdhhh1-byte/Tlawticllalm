@@ -1,0 +1,6 @@
+{
+  "name": "تلاوتك للعالم - TilawatakLilAlam",
+  "description": "منصة عالمية لتلاوات القرآن الكريم واكتشاف أصوات القراء ونشر التلاوات",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

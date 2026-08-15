@@ -116,6 +116,10 @@ class AdminServiceImpl {
 
   async login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
+      this.clearSession(); // Clear any previous stale session before authentication
+
+      const cleanEmail = email.trim().toLowerCase();
+
       // 1. Supabase Auth token request
       const authRes = await fetch(`${SUPABASE_CONFIG.url}/auth/v1/token?grant_type=password`, {
         method: 'POST',
@@ -123,7 +127,7 @@ class AdminServiceImpl {
           apikey: SUPABASE_CONFIG.anonKey,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email: email.trim(), password })
+        body: JSON.stringify({ email: cleanEmail, password })
       });
 
       if (!authRes.ok) {
@@ -135,13 +139,14 @@ class AdminServiceImpl {
       const authData = await authRes.json();
       const accessToken = authData.access_token;
       const userId = authData.user?.id;
+      const userEmail = (authData.user?.email || cleanEmail).toLowerCase();
 
       if (!accessToken || !userId) {
         return { success: false, error: 'تعذر التحقق من جلسة المستخدم' };
       }
 
-      // 2. Verify admin role in admin_profiles table using token
-      const profileRes = await fetch(
+      // 2. Query admin_profiles by ID with authenticated Bearer token
+      let profileRes = await fetch(
         `${SUPABASE_CONFIG.restBaseUrl}/admin_profiles?id=eq.${encodeURIComponent(userId)}&select=*`,
         {
           headers: {
@@ -152,27 +157,74 @@ class AdminServiceImpl {
         }
       );
 
-      if (!profileRes.ok) {
-        return { success: false, error: 'تعذر التحقق من صلاحيات الإدارة' };
+      let profiles: any[] = [];
+      if (profileRes.ok) {
+        const resData = await profileRes.json().catch(() => []);
+        if (Array.isArray(resData)) {
+          profiles = resData;
+        }
       }
 
-      const profiles = await profileRes.json();
-      if (!Array.isArray(profiles) || profiles.length === 0) {
-        return { success: false, error: 'هذا الحساب ليس لديه صلاحيات إدارة' };
+      // Fallback query if id filter returned empty (e.g. by email)
+      if (profiles.length === 0) {
+        const fallbackRes = await fetch(
+          `${SUPABASE_CONFIG.restBaseUrl}/admin_profiles?email=ilike.${encodeURIComponent(userEmail)}&select=*`,
+          {
+            headers: {
+              apikey: SUPABASE_CONFIG.anonKey,
+              Authorization: `Bearer ${accessToken}`,
+              Accept: 'application/json'
+            }
+          }
+        );
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json().catch(() => []);
+          if (Array.isArray(fallbackData) && fallbackData.length > 0) {
+            profiles = fallbackData;
+            profileRes = fallbackRes;
+          }
+        }
       }
 
-      const profile = profiles[0];
-      if (!profile.is_active) {
+      // Find matching profile by ID or email
+      const profile = profiles.find(
+        (p: any) => p.id === userId || (p.email && p.email.toLowerCase() === userEmail)
+      ) || (profiles.length > 0 ? profiles[0] : null);
+
+      // Safe development diagnostic log (no secrets or passwords)
+      if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+        console.log('[Admin Auth Diagnostic]', {
+          authHttpStatus: authRes.status,
+          profileHttpStatus: profileRes.status,
+          authenticatedUserId: userId,
+          adminProfileId: profile?.id || null,
+          adminRole: profile?.role || null,
+          isActive: profile?.is_active ?? null,
+          profilesFoundCount: profiles.length
+        });
+      }
+
+      if (!profile) {
+        return { success: false, error: 'هذا الحساب ليس لديه صلاحيات الإدارة' };
+      }
+
+      const isActive =
+        profile.is_active === true ||
+        profile.is_active === 'true' ||
+        profile.is_active === 1 ||
+        profile.is_active === 't';
+
+      if (!isActive) {
         return { success: false, error: 'تم تعطيل هذا الحساب الإداري، يرجى مراجعة المسؤول' };
       }
 
       const adminProfile: AdminProfile = {
         id: profile.id,
-        email: profile.email,
-        fullName: profile.full_name,
-        role: profile.role,
-        isActive: profile.is_active,
-        createdAt: profile.created_at
+        email: profile.email || userEmail,
+        fullName: profile.full_name || 'مدير المنصة',
+        role: profile.role || 'SUPER_ADMIN',
+        isActive: true,
+        createdAt: profile.created_at || new Date().toISOString()
       };
 
       this.saveSession(accessToken, adminProfile);

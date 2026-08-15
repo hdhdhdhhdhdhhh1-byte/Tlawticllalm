@@ -14,6 +14,16 @@ import {
 } from '../types';
 import { SUPABASE_CONFIG } from './SupabaseService';
 
+export interface AdminAuthDiagnostic {
+  authHttpStatus?: number;
+  profileHttpStatus?: number;
+  authenticatedUserId?: string | null;
+  adminProfileId?: string | null;
+  adminRole?: string | null;
+  isActive?: boolean | string | number | null;
+  profilesFoundCount?: number;
+}
+
 const ADMIN_STORAGE_KEY = 'tilawatak_admin_session';
 
 class AdminServiceImpl {
@@ -111,10 +121,71 @@ class AdminServiceImpl {
   }
 
   // ============================================================================
+  // DIAGNOSTICS
+  // ============================================================================
+
+  /**
+   * Development-only diagnostic calling the public RPC is_admin() using the current access token.
+   * Logs strictly non-sensitive fields: status, response, user ID, boolean result.
+   */
+  async checkIsAdminRpc(context: string = 'diagnostic'): Promise<boolean | null> {
+    if (typeof window === 'undefined' || !(import.meta as any).env?.DEV) return null;
+    if (!this.authState.token) {
+      console.log(`[is_admin Diagnostic - ${context}]`, {
+        rpcHttpStatus: null,
+        rpcResponse: 'No token in session',
+        authenticatedUserId: this.authState.admin?.id || null,
+        isAdmin: false
+      });
+      return false;
+    }
+
+    try {
+      const rpcRes = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/rpc/is_admin`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_CONFIG.anonKey,
+          Authorization: `Bearer ${this.authState.token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({})
+      });
+
+      const rpcHttpStatus = rpcRes.status;
+      let rpcResponse: any = null;
+      try {
+        rpcResponse = await rpcRes.json();
+      } catch {
+        rpcResponse = await rpcRes.text().catch(() => null);
+      }
+
+      const isAdmin = rpcResponse === true || rpcResponse === 'true';
+
+      console.log(`[is_admin Diagnostic - ${context}]`, {
+        rpcHttpStatus,
+        rpcResponse,
+        authenticatedUserId: this.authState.admin?.id || null,
+        isAdmin
+      });
+
+      return isAdmin;
+    } catch (e: any) {
+      console.warn(`[is_admin Diagnostic - ${context}] Error calling RPC is_admin:`, {
+        rpcHttpStatus: null,
+        rpcResponse: e?.message || 'Network error',
+        authenticatedUserId: this.authState.admin?.id || null,
+        isAdmin: false
+      });
+      return null;
+    }
+  }
+
+  // ============================================================================
   // 1. ADMIN AUTHENTICATION
   // ============================================================================
 
-  async login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+  async login(email: string, password: string): Promise<{ success: boolean; error?: string; diagnostic?: AdminAuthDiagnostic }> {
     try {
       this.clearSession(); // Clear any previous stale session before authentication
 
@@ -133,7 +204,19 @@ class AdminServiceImpl {
       if (!authRes.ok) {
         const errJson = await authRes.json().catch(() => ({}));
         const message = errJson.error_description || errJson.msg || errJson.message || 'بيانات الدخول غير صحيحة';
-        return { success: false, error: message };
+        return {
+          success: false,
+          error: message,
+          diagnostic: {
+            authHttpStatus: authRes.status,
+            profileHttpStatus: undefined,
+            authenticatedUserId: null,
+            adminProfileId: null,
+            adminRole: null,
+            isActive: null,
+            profilesFoundCount: 0
+          }
+        };
       }
 
       const authData = await authRes.json();
@@ -142,7 +225,19 @@ class AdminServiceImpl {
       const userEmail = (authData.user?.email || cleanEmail).toLowerCase();
 
       if (!accessToken || !userId) {
-        return { success: false, error: 'تعذر التحقق من جلسة المستخدم' };
+        return {
+          success: false,
+          error: 'تعذر التحقق من جلسة المستخدم',
+          diagnostic: {
+            authHttpStatus: authRes.status,
+            profileHttpStatus: undefined,
+            authenticatedUserId: userId || null,
+            adminProfileId: null,
+            adminRole: null,
+            isActive: null,
+            profilesFoundCount: 0
+          }
+        };
       }
 
       // 2. Query admin_profiles by ID with authenticated Bearer token
@@ -191,21 +286,27 @@ class AdminServiceImpl {
         (p: any) => p.id === userId || (p.email && p.email.toLowerCase() === userEmail)
       ) || (profiles.length > 0 ? profiles[0] : null);
 
+      const diagnosticData: AdminAuthDiagnostic = {
+        authHttpStatus: authRes.status,
+        profileHttpStatus: profileRes.status,
+        authenticatedUserId: userId || null,
+        adminProfileId: profile?.id || null,
+        adminRole: profile?.role || null,
+        isActive: profile ? (profile.is_active ?? null) : null,
+        profilesFoundCount: profiles.length
+      };
+
       // Safe development diagnostic log (no secrets or passwords)
       if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
-        console.log('[Admin Auth Diagnostic]', {
-          authHttpStatus: authRes.status,
-          profileHttpStatus: profileRes.status,
-          authenticatedUserId: userId,
-          adminProfileId: profile?.id || null,
-          adminRole: profile?.role || null,
-          isActive: profile?.is_active ?? null,
-          profilesFoundCount: profiles.length
-        });
+        console.log('[Admin Auth Diagnostic]', diagnosticData);
       }
 
       if (!profile) {
-        return { success: false, error: 'هذا الحساب ليس لديه صلاحيات الإدارة' };
+        return {
+          success: false,
+          error: 'هذا الحساب ليس لديه صلاحيات الإدارة',
+          diagnostic: diagnosticData
+        };
       }
 
       const isActive =
@@ -215,7 +316,11 @@ class AdminServiceImpl {
         profile.is_active === 't';
 
       if (!isActive) {
-        return { success: false, error: 'تم تعطيل هذا الحساب الإداري، يرجى مراجعة المسؤول' };
+        return {
+          success: false,
+          error: 'تم تعطيل هذا الحساب الإداري، يرجى مراجعة المسؤول',
+          diagnostic: diagnosticData
+        };
       }
 
       const adminProfile: AdminProfile = {
@@ -228,6 +333,12 @@ class AdminServiceImpl {
       };
 
       this.saveSession(accessToken, adminProfile);
+
+      // Development-only diagnostic call to public RPC is_admin() using the access token
+      if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+        this.checkIsAdminRpc('post-login');
+      }
+
       return { success: true };
     } catch (e: any) {
       console.error('Admin login error:', e);
@@ -408,6 +519,10 @@ class AdminServiceImpl {
 
     // 1. Create new reciter if requested
     if (params.createNewReciter && params.newReciterData) {
+      if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+        await this.checkIsAdminRpc('approveSubmission-before-POST-reciters');
+      }
+
       const reciterRes = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/reciters`, {
         method: 'POST',
         headers: {
@@ -429,6 +544,9 @@ class AdminServiceImpl {
       });
 
       if (!reciterRes.ok) {
+        if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+          await this.checkIsAdminRpc(`approveSubmission-POST-reciters-failed-HTTP-${reciterRes.status}`);
+        }
         throw new Error(`Failed to create reciter (HTTP ${reciterRes.status})`);
       }
       const newReciters = await reciterRes.json();
@@ -501,6 +619,10 @@ class AdminServiceImpl {
     isFeatured: boolean;
     isPublished: boolean;
   }): Promise<any> {
+    if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+      await this.checkIsAdminRpc('before-POST-reciters');
+    }
+
     const res = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/reciters`, {
       method: 'POST',
       headers: {
@@ -520,7 +642,12 @@ class AdminServiceImpl {
         is_published: data.isPublished
       })
     });
-    if (!res.ok) throw new Error(`Failed to create reciter (HTTP ${res.status})`);
+    if (!res.ok) {
+      if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+        await this.checkIsAdminRpc(`POST-reciters-failed-HTTP-${res.status}`);
+      }
+      throw new Error(`Failed to create reciter (HTTP ${res.status})`);
+    }
     const json = await res.json();
     return json[0];
   }

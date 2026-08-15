@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { adminService } from '../../services/AdminService';
-import { Lock, Mail, ShieldCheck, AlertCircle, ArrowRight, Sparkles, KeyRound } from 'lucide-react';
+import { adminService, AdminAuthDiagnostic } from '../../services/AdminService';
+import { Lock, Mail, ShieldCheck, AlertCircle, ArrowRight, Sparkles, KeyRound, Terminal } from 'lucide-react';
 
 interface AdminLoginScreenProps {
   onSuccess: () => void;
@@ -12,6 +12,7 @@ export function AdminLoginScreen({ onSuccess, onBackToApp }: AdminLoginScreenPro
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<AdminAuthDiagnostic | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +23,7 @@ export function AdminLoginScreen({ onSuccess, onBackToApp }: AdminLoginScreenPro
 
     setIsLoading(true);
     setErrorMessage(null);
+    setDiagnostic(null);
 
     try {
       const res = await adminService.login(email, password);
@@ -29,6 +31,9 @@ export function AdminLoginScreen({ onSuccess, onBackToApp }: AdminLoginScreenPro
         onSuccess();
       } else {
         setErrorMessage(res.error || 'فشل تسجيل الدخول، تحقق من البيانات');
+        if (res.diagnostic) {
+          setDiagnostic(res.diagnostic);
+        }
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'حدث خطأ غير متوقع');
@@ -70,6 +75,48 @@ export function AdminLoginScreen({ onSuccess, onBackToApp }: AdminLoginScreenPro
             <div className="space-y-1">
               <span className="font-semibold">تنبيه:</span>
               <p>{errorMessage}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Runtime Diagnostic Panel (Non-sensitive) */}
+        {diagnostic && (
+          <div className="p-3.5 bg-[#0D1813] border border-[#2E5242] rounded-xl space-y-2 text-xs" dir="ltr">
+            <div className="flex items-center gap-1.5 text-[#D4AF37] font-mono text-[11px] font-semibold">
+              <Terminal className="w-3.5 h-3.5" />
+              <span>Runtime Auth Diagnostic</span>
+            </div>
+            <div className="font-mono text-[11px] text-[#A8C2B3] space-y-1 bg-black/40 p-2.5 rounded-lg border border-[#1A3327]">
+              <div className="flex justify-between py-0.5 border-b border-white/5">
+                <span className="text-[#6E8E7E]">authHttpStatus:</span>
+                <span className="text-white font-semibold">{diagnostic.authHttpStatus ?? 'undefined'}</span>
+              </div>
+              <div className="flex justify-between py-0.5 border-b border-white/5">
+                <span className="text-[#6E8E7E]">profileHttpStatus:</span>
+                <span className="text-white font-semibold">{diagnostic.profileHttpStatus ?? 'undefined'}</span>
+              </div>
+              <div className="flex justify-between py-0.5 border-b border-white/5">
+                <span className="text-[#6E8E7E]">authenticatedUserId:</span>
+                <span className="text-[#8AD8B0] break-all">{diagnostic.authenticatedUserId ?? 'null'}</span>
+              </div>
+              <div className="flex justify-between py-0.5 border-b border-white/5">
+                <span className="text-[#6E8E7E]">adminProfileId:</span>
+                <span className="text-[#8AD8B0] break-all">{diagnostic.adminProfileId ?? 'null'}</span>
+              </div>
+              <div className="flex justify-between py-0.5 border-b border-white/5">
+                <span className="text-[#6E8E7E]">adminRole:</span>
+                <span className="text-[#D4AF37] font-semibold">{diagnostic.adminRole ?? 'null'}</span>
+              </div>
+              <div className="flex justify-between py-0.5 border-b border-white/5">
+                <span className="text-[#6E8E7E]">isActive:</span>
+                <span className={diagnostic.isActive === true || diagnostic.isActive === 'true' ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+                  {diagnostic.isActive === null ? 'null' : String(diagnostic.isActive)}
+                </span>
+              </div>
+              <div className="flex justify-between py-0.5">
+                <span className="text-[#6E8E7E]">profilesFoundCount:</span>
+                <span className="text-white font-semibold">{diagnostic.profilesFoundCount ?? 0}</span>
+              </div>
             </div>
           </div>
         )}

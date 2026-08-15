@@ -6,6 +6,7 @@ interface HeaderProps {
   onOpenSubmissions: () => void;
   submissions: RecitationSubmission[];
   onOpenArchitecture: () => void;
+  onOpenAdmin: () => void;
   isTabletView: boolean;
   onToggleTabletView: () => void;
 }
@@ -14,6 +15,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSubmissions,
   submissions,
   onOpenArchitecture,
+  onOpenAdmin,
   isTabletView,
   onToggleTabletView
 }) => {
@@ -71,6 +73,16 @@ export const Header: React.FC<HeaderProps> = ({
             <Code2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">بنية Kotlin / Compose</span>
             <span className="sm:hidden text-[10px]">Android</span>
+          </button>
+
+          {/* Admin Control Panel Switch */}
+          <button
+            onClick={onOpenAdmin}
+            className="px-3 py-1.5 rounded-lg bg-[#315F4A]/10 hover:bg-[#315F4A]/20 border border-[#315F4A]/30 text-[#244C3A] hover:text-[#102A20] transition-colors flex items-center gap-1.5 text-xs font-bold"
+            title="لوحة تحكم إدارة المنصة والمحتوى"
+          >
+            <ShieldCheck className="w-4 h-4 text-[#C9A961]" />
+            <span className="hidden sm:inline">الإدارة</span>
           </button>
         </div>
       </div>

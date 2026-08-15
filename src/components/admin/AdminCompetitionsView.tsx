@@ -68,11 +68,11 @@ export function AdminCompetitionsView() {
     setEditingItem(item);
     setTitle(item.title);
     setDescription(item.description);
-    setStartDate(new Date(item.startDate).toISOString().split('T')[0]);
-    setEndDate(new Date(item.endDate).toISOString().split('T')[0]);
-    setRewardSummary(item.rewardSummary || '');
-    setTerms(item.terms || '');
-    setIsActive(item.isActive);
+    setStartDate(new Date(item.startAt).toISOString().split('T')[0]);
+    setEndDate(new Date(item.endAt).toISOString().split('T')[0]);
+    setRewardSummary('');
+    setTerms('');
+    setIsActive(item.isPublished);
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -96,21 +96,17 @@ export function AdminCompetitionsView() {
         await adminService.updateCompetition(editingItem.id, {
           title,
           description,
-          startDate: new Date(startDate).toISOString(),
-          endDate: new Date(endDate).toISOString(),
-          rewardSummary: rewardSummary.trim() ? rewardSummary : null,
-          terms: terms.trim() ? terms : null,
-          isActive
+          startAt: new Date(startDate).toISOString(),
+          endAt: new Date(endDate).toISOString(),
+          isPublished: isActive
         });
       } else {
         await adminService.createCompetition({
           title,
           description,
-          startDate: new Date(startDate).toISOString(),
-          endDate: new Date(endDate).toISOString(),
-          rewardSummary: rewardSummary.trim() ? rewardSummary : undefined,
-          terms: terms.trim() ? terms : undefined,
-          isActive
+          startAt: new Date(startDate).toISOString(),
+          endAt: new Date(endDate).toISOString(),
+          isPublished: isActive
         });
       }
 
@@ -126,10 +122,10 @@ export function AdminCompetitionsView() {
   const handleToggleActive = async (item: Competition) => {
     try {
       await adminService.updateCompetition(item.id, {
-        isActive: !item.isActive
+        isPublished: !item.isPublished
       });
       setCompetitions((prev) =>
-        prev.map((c) => (c.id === item.id ? { ...c, isActive: !c.isActive } : c))
+        prev.map((c) => (c.id === item.id ? { ...c, isPublished: !c.isPublished } : c))
       );
     } catch (e) {
       console.error('Failed to toggle competition status:', e);
@@ -191,7 +187,7 @@ export function AdminCompetitionsView() {
           <div className="w-12 h-12 rounded-full bg-[#1A3328] border border-[#2B5742] flex items-center justify-center mx-auto text-[#8BA496]">
             <Trophy className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-[#F0F5F2]">لا توجد مسابقات حالية</h3>
+          <h3 className="text-base font-bold text-[#F0F5F2]">لا توجد مسابقات</h3>
           <p className="text-xs text-[#8BA496] max-w-sm mx-auto">
             يمكنك إطلاق مسابقات تلاوة دورية لحث القراء على إرسال تلاواتهم العذبة.
           </p>
@@ -219,12 +215,12 @@ export function AdminCompetitionsView() {
 
                   <span
                     className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${
-                      item.isActive
+                      item.isPublished
                         ? 'bg-amber-950/70 border border-amber-800 text-amber-300'
                         : 'bg-zinc-800 border border-zinc-700 text-zinc-400'
                     }`}
                   >
-                    {item.isActive ? 'مسابقة نشطة' : 'منتهية / معلقة'}
+                    {item.isPublished ? 'مسابقة منشورة' : 'مسودة / معلقة'}
                   </span>
                 </div>
 
@@ -232,20 +228,13 @@ export function AdminCompetitionsView() {
                   {item.description}
                 </p>
 
-                {item.rewardSummary && (
-                  <div className="flex items-center gap-1.5 text-xs text-[#D4AF37] font-semibold bg-[#1F372C]/40 p-2 rounded-lg border border-[#2B493B]">
-                    <Gift className="w-3.5 h-3.5" />
-                    <span>الجوائز والأوسمة: {item.rewardSummary}</span>
-                  </div>
-                )}
-
                 <div className="flex items-center gap-3 text-[11px] text-[#6E8E7E]">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
-                    <span>من: {new Date(item.startDate).toLocaleDateString('ar-EG')}</span>
+                    <span>من: {new Date(item.startAt).toLocaleDateString('ar-EG')}</span>
                   </span>
                   <span>-</span>
-                  <span>إلى: {new Date(item.endDate).toLocaleDateString('ar-EG')}</span>
+                  <span>إلى: {new Date(item.endAt).toLocaleDateString('ar-EG')}</span>
                 </div>
               </div>
 
@@ -253,20 +242,20 @@ export function AdminCompetitionsView() {
                 <button
                   onClick={() => handleToggleActive(item)}
                   className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition ${
-                    item.isActive
+                    item.isPublished
                       ? 'bg-amber-950/40 border-amber-800 text-amber-400'
                       : 'bg-zinc-900 border-zinc-700 text-zinc-400'
                   }`}
                 >
-                  {item.isActive ? (
+                  {item.isPublished ? (
                     <>
                       <Eye className="w-3.5 h-3.5" />
-                      <span>إيقاف المسابقة</span>
+                      <span>إيقاف النشر</span>
                     </>
                   ) : (
                     <>
                       <EyeOff className="w-3.5 h-3.5" />
-                      <span>تنشيط المسابقة</span>
+                      <span>نشر المسابقة</span>
                     </>
                   )}
                 </button>

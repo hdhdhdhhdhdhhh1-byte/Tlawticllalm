@@ -95,7 +95,7 @@ class HybridReciterRepository implements IReciterRepository {
   async getAllReciters(): Promise<Reciter[]> {
     if (currentDataSourceMode === DataSourceMode.SUPABASE) {
       const data = await SupabaseService.fetchPublicReciters();
-      if (data && Array.isArray(data) && data.length > 0) {
+      if (data && Array.isArray(data)) {
         return data.map((d: any) => ({
           id: d.id,
           displayName: d.display_name,
@@ -116,6 +116,7 @@ class HybridReciterRepository implements IReciterRepository {
           createdAt: d.created_at || new Date().toISOString()
         }));
       }
+      return [];
     }
     return [...this.reciters];
   }
@@ -185,7 +186,7 @@ class HybridRecitationRepository implements IRecitationRepository {
   async getAllRecitations(): Promise<Recitation[]> {
     if (currentDataSourceMode === DataSourceMode.SUPABASE) {
       const data = await SupabaseService.fetchPublicRecitations();
-      if (data && Array.isArray(data) && data.length > 0) {
+      if (data && Array.isArray(data)) {
         const userLikes = this.userLikesMap.get('user_current') || new Set();
         return data.map((d: any) => ({
           id: d.id,
@@ -210,6 +211,7 @@ class HybridRecitationRepository implements IRecitationRepository {
           createdAt: d.published_at || new Date().toISOString()
         }));
       }
+      return [];
     }
     return [...this.recitations];
   }
@@ -220,7 +222,7 @@ class HybridRecitationRepository implements IRecitationRepository {
   async getRecitationsByReciter(reciterId: string): Promise<Recitation[]> {
     if (currentDataSourceMode === DataSourceMode.SUPABASE) {
       const data = await SupabaseService.fetchPublicRecitations(reciterId);
-      if (data && Array.isArray(data) && data.length > 0) {
+      if (data && Array.isArray(data)) {
         const userLikes = this.userLikesMap.get('user_current') || new Set();
         return data.map((d: any) => ({
           id: d.id,
@@ -245,6 +247,7 @@ class HybridRecitationRepository implements IRecitationRepository {
           createdAt: d.published_at || new Date().toISOString()
         }));
       }
+      return [];
     }
     return this.recitations
       .filter((r) => r.reciterId === reciterId)

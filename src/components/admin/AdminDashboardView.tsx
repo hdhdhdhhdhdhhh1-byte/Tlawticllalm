@@ -21,10 +21,16 @@ import {
 } from 'lucide-react';
 
 interface AdminDashboardViewProps {
-  onNavigateTab: (tab: AdminTab) => void;
+  onNavigate?: (tab: AdminTab) => void;
+  onNavigateTab?: (tab: AdminTab) => void;
 }
 
-export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
+export function AdminDashboardView({ onNavigate, onNavigateTab }: AdminDashboardViewProps) {
+  const navigate = (tab: AdminTab) => {
+    if (onNavigate) onNavigate(tab);
+    else if (onNavigateTab) onNavigateTab(tab);
+  };
+
   const [stats, setStats] = useState<AdminDashboardStats>({
     totalReciters: 0,
     publishedReciters: 0,
@@ -83,7 +89,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: إجمالي القراء */}
         <div
-          onClick={() => onNavigateTab('reciters')}
+          onClick={() => navigate('reciters')}
           className="p-4 bg-[#14241D] hover:bg-[#192E25] border border-[#234235] rounded-2xl cursor-pointer transition space-y-2 group shadow-sm"
         >
           <div className="flex items-center justify-between">
@@ -103,7 +109,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
 
         {/* Card 2: القراء المنشورون */}
         <div
-          onClick={() => onNavigateTab('reciters')}
+          onClick={() => navigate('reciters')}
           className="p-4 bg-[#14241D] hover:bg-[#192E25] border border-[#234235] rounded-2xl cursor-pointer transition space-y-2 group shadow-sm"
         >
           <div className="flex items-center justify-between">
@@ -124,7 +130,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
 
         {/* Card 3: إجمالي التلاوات */}
         <div
-          onClick={() => onNavigateTab('recitations')}
+          onClick={() => navigate('recitations')}
           className="p-4 bg-[#14241D] hover:bg-[#192E25] border border-[#234235] rounded-2xl cursor-pointer transition space-y-2 group shadow-sm"
         >
           <div className="flex items-center justify-between">
@@ -144,7 +150,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
 
         {/* Card 4: التلاوات المنشورة */}
         <div
-          onClick={() => onNavigateTab('recitations')}
+          onClick={() => navigate('recitations')}
           className="p-4 bg-[#14241D] hover:bg-[#192E25] border border-[#234235] rounded-2xl cursor-pointer transition space-y-2 group shadow-sm"
         >
           <div className="flex items-center justify-between">
@@ -163,7 +169,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
 
         {/* Card 5: طلبات التلاوة الجديدة */}
         <div
-          onClick={() => onNavigateTab('submissions')}
+          onClick={() => navigate('submissions')}
           className="p-4 bg-[#1E2E24] hover:bg-[#25392D] border-2 border-[#D4AF37]/50 rounded-2xl cursor-pointer transition space-y-2 group shadow-md"
         >
           <div className="flex items-center justify-between">
@@ -188,7 +194,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
 
         {/* Card 6: إجمالي الاستماعات */}
         <div
-          onClick={() => onNavigateTab('statistics')}
+          onClick={() => navigate('statistics')}
           className="p-4 bg-[#14241D] hover:bg-[#192E25] border border-[#234235] rounded-2xl cursor-pointer transition space-y-2 group shadow-sm"
         >
           <div className="flex items-center justify-between">
@@ -207,7 +213,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
 
         {/* Card 7: إجمالي الإعجابات */}
         <div
-          onClick={() => onNavigateTab('statistics')}
+          onClick={() => navigate('statistics')}
           className="p-4 bg-[#14241D] hover:bg-[#192E25] border border-[#234235] rounded-2xl cursor-pointer transition space-y-2 group shadow-sm"
         >
           <div className="flex items-center justify-between">
@@ -226,7 +232,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
 
         {/* Card 8: المسابقات النشطة */}
         <div
-          onClick={() => onNavigateTab('competitions')}
+          onClick={() => navigate('competitions')}
           className="p-4 bg-[#14241D] hover:bg-[#192E25] border border-[#234235] rounded-2xl cursor-pointer transition space-y-2 group shadow-sm"
         >
           <div className="flex items-center justify-between">
@@ -253,7 +259,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <button
-            onClick={() => onNavigateTab('submissions')}
+            onClick={() => navigate('submissions')}
             className="p-3 bg-[#1A3328] hover:bg-[#224435] text-white rounded-xl border border-[#2B5742] flex flex-col items-center justify-center gap-2 text-xs font-semibold transition group"
           >
             <FileCheck className="w-5 h-5 text-[#D4AF37] group-hover:scale-110 transition" />
@@ -261,7 +267,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
           </button>
 
           <button
-            onClick={() => onNavigateTab('reciters')}
+            onClick={() => navigate('reciters')}
             className="p-3 bg-[#1A3328] hover:bg-[#224435] text-white rounded-xl border border-[#2B5742] flex flex-col items-center justify-center gap-2 text-xs font-semibold transition group"
           >
             <Users className="w-5 h-5 text-[#34D399] group-hover:scale-110 transition" />
@@ -269,7 +275,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
           </button>
 
           <button
-            onClick={() => onNavigateTab('recitations')}
+            onClick={() => navigate('recitations')}
             className="p-3 bg-[#1A3328] hover:bg-[#224435] text-white rounded-xl border border-[#2B5742] flex flex-col items-center justify-center gap-2 text-xs font-semibold transition group"
           >
             <Music className="w-5 h-5 text-[#60A5FA] group-hover:scale-110 transition" />
@@ -277,7 +283,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
           </button>
 
           <button
-            onClick={() => onNavigateTab('announcements')}
+            onClick={() => navigate('announcements')}
             className="p-3 bg-[#1A3328] hover:bg-[#224435] text-white rounded-xl border border-[#2B5742] flex flex-col items-center justify-center gap-2 text-xs font-semibold transition group"
           >
             <Megaphone className="w-5 h-5 text-[#F59E0B] group-hover:scale-110 transition" />
@@ -285,7 +291,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
           </button>
 
           <button
-            onClick={() => onNavigateTab('competitions')}
+            onClick={() => navigate('competitions')}
             className="p-3 bg-[#1A3328] hover:bg-[#224435] text-white rounded-xl border border-[#2B5742] flex flex-col items-center justify-center gap-2 text-xs font-semibold transition group"
           >
             <Trophy className="w-5 h-5 text-[#FBBF24] group-hover:scale-110 transition" />
@@ -293,7 +299,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
           </button>
 
           <button
-            onClick={() => onNavigateTab('rewards')}
+            onClick={() => navigate('rewards')}
             className="p-3 bg-[#1A3328] hover:bg-[#224435] text-white rounded-xl border border-[#2B5742] flex flex-col items-center justify-center gap-2 text-xs font-semibold transition group"
           >
             <Award className="w-5 h-5 text-[#A78BFA] group-hover:scale-110 transition" />
@@ -315,7 +321,7 @@ export function AdminDashboardView({ onNavigateTab }: AdminDashboardViewProps) {
         </div>
 
         <button
-          onClick={() => onNavigateTab('submissions')}
+          onClick={() => navigate('submissions')}
           className="px-4 py-2.5 bg-[#2B5742] hover:bg-[#346950] text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 transition"
         >
           <span>عرض طلبات التلاوة ({stats.pendingSubmissions})</span>

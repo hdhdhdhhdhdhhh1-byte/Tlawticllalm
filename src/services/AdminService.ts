@@ -823,12 +823,19 @@ class AdminServiceImpl {
   }
 
   async createRewardDefinition(data: {
-    code: string;
+    code?: string;
     title: string;
     description: string;
-    category: 'TAJWEED_EXCELLENCE' | 'COMMUNITY_FAVORITE' | 'MILESTONE_COMPLETION' | 'EDITORIAL_HONOR';
+    category?: 'TAJWEED_EXCELLENCE' | 'COMMUNITY_FAVORITE' | 'MILESTONE_COMPLETION' | 'EDITORIAL_HONOR' | string;
     badgeIconPath?: string;
+    iconName?: string;
+    pointsValue?: number;
   }): Promise<void> {
+    const code = data.code || `HONOR_${Date.now().toString(36).toUpperCase()}`;
+    const category = (data.category && ['TAJWEED_EXCELLENCE', 'COMMUNITY_FAVORITE', 'MILESTONE_COMPLETION', 'EDITORIAL_HONOR'].includes(data.category))
+      ? data.category
+      : 'EDITORIAL_HONOR';
+
     const res = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/reward_definitions`, {
       method: 'POST',
       headers: {
@@ -836,19 +843,63 @@ class AdminServiceImpl {
         Prefer: 'return=representation'
       },
       body: JSON.stringify({
-        code: data.code,
+        code,
         title: data.title,
         description: data.description,
-        category: data.category,
-        badge_icon_path: data.badgeIconPath || null,
+        category,
+        badge_icon_path: data.badgeIconPath || data.iconName || null,
         is_active: true
       })
     });
     if (!res.ok) throw new Error(`Failed to create reward definition (HTTP ${res.status})`);
   }
 
+  async updateRewardDefinition(
+    id: string,
+    data: Partial<{
+      title: string;
+      description: string;
+      category: string;
+      iconName: string;
+      badgeIconPath: string;
+      pointsValue: number;
+      isActive: boolean;
+    }>
+  ): Promise<void> {
+    const payload: Record<string, any> = {};
+    if (data.title !== undefined) payload.title = data.title;
+    if (data.description !== undefined) payload.description = data.description;
+    if (data.category !== undefined) {
+      if (['TAJWEED_EXCELLENCE', 'COMMUNITY_FAVORITE', 'MILESTONE_COMPLETION', 'EDITORIAL_HONOR'].includes(data.category)) {
+        payload.category = data.category;
+      }
+    }
+    if (data.badgeIconPath !== undefined || data.iconName !== undefined) {
+      payload.badge_icon_path = data.badgeIconPath || data.iconName;
+    }
+    if (data.isActive !== undefined) payload.is_active = data.isActive;
+
+    const res = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/reward_definitions?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: {
+        ...this.getAuthHeaders(),
+        Prefer: 'return=representation'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`Failed to update reward definition (HTTP ${res.status})`);
+  }
+
+  async deleteRewardDefinition(id: string): Promise<void> {
+    const res = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/reward_definitions?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders()
+    });
+    if (!res.ok) throw new Error(`Failed to delete reward definition (HTTP ${res.status})`);
+  }
+
   async getReciterHonors(reciterId?: string): Promise<ReciterHonor[]> {
-    let url = `${SUPABASE_CONFIG.restBaseUrl}/reciter_honors?select=*,reward_definitions(*)&order=awarded_at.desc`;
+    let url = `${SUPABASE_CONFIG.restBaseUrl}/reciter_honors?select=*,reward_definitions(*),reciters(display_name,pseudonym,country,profile_image_path)&order=awarded_at.desc`;
     if (reciterId) {
       url += `&reciter_id=eq.${encodeURIComponent(reciterId)}`;
     }
@@ -862,6 +913,15 @@ class AdminServiceImpl {
       awardedAt: r.awarded_at,
       awardedBy: r.awarded_by,
       citationNote: r.citation_note,
+      reciter: r.reciters
+        ? {
+            id: r.reciter_id,
+            displayName: r.reciters.display_name,
+            pseudonym: r.reciters.pseudonym,
+            country: r.reciters.country,
+            profileImagePath: r.reciters.profile_image_path
+          }
+        : undefined,
       reward: r.reward_definitions
         ? {
             id: r.reward_definitions.id,
@@ -877,7 +937,45 @@ class AdminServiceImpl {
     }));
   }
 
-  async awardHonorToReciter(reciterId: string, rewardId: string, citationNote?: string): Promise<void> {
+  async getHonors(reciterId?: string): Promise<any[]> {
+    return this.getReciterHonors(reciterId);
+  }
+
+  async awardHonorToReciter(
+    reciterIdOrParams:
+      | string
+      | {
+          reciterId: string;
+          rewardDefinitionId?: string;
+          rewardId?: string;
+          honorTitle?: string;
+          citationNote?: string;
+        },
+    rewardId?: string,
+    citationNote?: string
+  ): Promise<void> {
+    let finalReciterId: string;
+    let finalRewardId: string | null = null;
+    let finalNote: string | null = null;
+
+    if (typeof reciterIdOrParams === 'object') {
+      finalReciterId = reciterIdOrParams.reciterId;
+      finalRewardId = reciterIdOrParams.rewardDefinitionId || reciterIdOrParams.rewardId || null;
+      finalNote = reciterIdOrParams.citationNote || reciterIdOrParams.honorTitle || null;
+    } else {
+      finalReciterId = reciterIdOrParams;
+      finalRewardId = rewardId || null;
+      finalNote = citationNote || null;
+    }
+
+    if (!finalRewardId) {
+      // If reward definition is not given, fetch the first available or create a default honor
+      const defs = await this.getRewardDefinitions();
+      if (defs.length > 0) {
+        finalRewardId = defs[0].id;
+      }
+    }
+
     const res = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/reciter_honors`, {
       method: 'POST',
       headers: {
@@ -885,9 +983,9 @@ class AdminServiceImpl {
         Prefer: 'return=representation'
       },
       body: JSON.stringify({
-        reciter_id: reciterId,
-        reward_id: rewardId,
-        citation_note: citationNote || null,
+        reciter_id: finalReciterId,
+        reward_id: finalRewardId,
+        citation_note: finalNote,
         awarded_by: this.authState.admin?.id || null
       })
     });

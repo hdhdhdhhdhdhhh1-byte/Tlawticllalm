@@ -262,10 +262,12 @@ export const ListenScreen: React.FC<ListenScreenProps> = ({
             <div className="text-center py-16 bg-white rounded-3xl border border-[#E2E5DF] p-6 space-y-2">
               <Headphones className="w-10 h-10 text-[#7A847E] mx-auto opacity-50" />
               <h3 className="text-base font-bold text-[#102A20]">
-                لم يتم العثور على تلاوات مطابقة
+                {recitations.length === 0 ? 'لا توجد تلاوات حتى الآن' : 'لم يتم العثور على تلاوات مطابقة'}
               </h3>
               <p className="text-xs text-[#7A847E]">
-                جرب تغيير خيارات البحث أو الفلاتر لاستعراض التلاوات الأخرى.
+                {recitations.length === 0
+                  ? 'سيتم إدراج التلاوات المعتمدة فور نشرها من قبل إدارة المنصة.'
+                  : 'جرب تغيير خيارات البحث أو الفلاتر لاستعراض التلاوات الأخرى.'}
               </p>
             </div>
           ) : (
@@ -293,10 +295,12 @@ export const ListenScreen: React.FC<ListenScreenProps> = ({
             <div className="text-center py-16 bg-white rounded-3xl border border-[#E2E5DF] p-6 space-y-2">
               <UserCheck className="w-10 h-10 text-[#7A847E] mx-auto opacity-50" />
               <h3 className="text-base font-bold text-[#102A20]">
-                لم يتم العثور على قراء مطابقين
+                {reciters.length === 0 ? 'لا يوجد قراء حتى الآن' : 'لم يتم العثور على قراء مطابقين'}
               </h3>
               <p className="text-xs text-[#7A847E]">
-                جرب البحث باسم آخر أو إزالة محدد الدولة.
+                {reciters.length === 0
+                  ? 'سيظهر القراء المعتمدون هنا بمجرد اعتماد ونشر ملفاتهم التعريفية.'
+                  : 'جرب البحث باسم آخر أو إزالة محدد الدولة.'}
               </p>
             </div>
           ) : (

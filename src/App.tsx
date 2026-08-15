@@ -27,6 +27,7 @@ import { FeaturedRecitersView } from './components/FeaturedRecitersView';
 import { ListenScreen } from './components/ListenScreen';
 import { AboutScreen } from './components/AboutScreen';
 import { AndroidArchitectureModal } from './components/AndroidArchitectureModal';
+import { AdminControlPanel } from './components/admin/AdminControlPanel';
 import { Radio, Sparkles, BookOpen, UserCheck, Flame, ArrowLeft } from 'lucide-react';
 
 export default function App() {
@@ -35,19 +36,22 @@ export default function App() {
   const [recitations, setRecitations] = useState<Recitation[]>([]);
   const [submissions, setSubmissions] = useState<RecitationSubmission[]>([]);
   
-  // Modals state
+  // Modals & Navigation state
   const [selectedReciter, setSelectedReciter] = useState<Reciter | null>(null);
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [isSubmissionsModalOpen, setIsSubmissionsModalOpen] = useState(false);
   const [isArchitectureModalOpen, setIsArchitectureModalOpen] = useState(false);
   const [isTabletView, setIsTabletView] = useState(false);
+  const [isAdminViewOpen, setIsAdminViewOpen] = useState<boolean>(
+    typeof window !== 'undefined' && window.location.hash === '#admin'
+  );
 
   // Global Player State
   const [playerState, setPlayerState] = useState<PlayerState>(audioService.getState());
 
   // Load initial data from Clean Architecture Repositories
-  useEffect(() => {
-    async function loadData() {
+  const loadData = async () => {
+    try {
       const [allReciters, allRecitations, allSubmissions] = await Promise.all([
         reciterRepository.getAllReciters(),
         recitationRepository.getAllRecitations(),
@@ -56,8 +60,22 @@ export default function App() {
       setReciters(allReciters);
       setRecitations(allRecitations);
       setSubmissions(allSubmissions);
+    } catch (e) {
+      console.error('Failed to load repositories data:', e);
     }
+  };
+
+  useEffect(() => {
     loadData();
+  }, []);
+
+  // Sync hash routing for admin panel
+  useEffect(() => {
+    const handleHashChange = () => {
+      setIsAdminViewOpen(window.location.hash === '#admin');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   // Subscribe to Audio Engine events
@@ -113,6 +131,21 @@ export default function App() {
   const homeStaffRecitations = recitations.filter((r) => r.isStaffPick).slice(0, 4);
   const homeTopReciters = reciters.slice(0, 4);
 
+  // If Admin Panel is open, render the Owner Admin Workspace
+  if (isAdminViewOpen) {
+    return (
+      <AdminControlPanel
+        onBackToApp={() => {
+          setIsAdminViewOpen(false);
+          if (window.location.hash === '#admin') {
+            window.history.pushState(null, '', window.location.pathname);
+          }
+          loadData();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAFBF9] text-[#102A20] flex flex-col font-tajawal pb-28 select-none">
       {/* Top Application Bar */}
@@ -120,6 +153,10 @@ export default function App() {
         onOpenSubmissions={() => setIsSubmissionsModalOpen(true)}
         submissions={submissions}
         onOpenArchitecture={() => setIsArchitectureModalOpen(true)}
+        onOpenAdmin={() => {
+          setIsAdminViewOpen(true);
+          window.location.hash = 'admin';
+        }}
         isTabletView={isTabletView}
         onToggleTabletView={() => setIsTabletView(!isTabletView)}
       />

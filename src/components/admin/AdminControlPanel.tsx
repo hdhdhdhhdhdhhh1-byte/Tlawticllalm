@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminService } from '../../services/AdminService';
+import { adminService, IsAdminRpcDiagnostic, PostRequestDiagnostic } from '../../services/AdminService';
 import { AdminAuthState } from '../../types';
 import { AdminLoginScreen } from './AdminLoginScreen';
 import { AdminDashboardView } from './AdminDashboardView';
@@ -28,7 +28,9 @@ import {
   Menu,
   X,
   ExternalLink,
-  ChevronLeft
+  ChevronLeft,
+  Terminal,
+  RefreshCw
 } from 'lucide-react';
 
 export type AdminTab =
@@ -52,13 +54,37 @@ export function AdminControlPanel({ onBackToApp }: AdminControlPanelProps) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+  const [liveDiagnostic, setLiveDiagnostic] = useState<IsAdminRpcDiagnostic | null>(
+    adminService.getLatestRpcDiagnostic()
+  );
+  const [livePostDiagnostic, setLivePostDiagnostic] = useState<PostRequestDiagnostic | null>(
+    adminService.getLatestPostDiagnostic()
+  );
+  const [isRefreshingRpc, setIsRefreshingRpc] = useState(false);
 
   useEffect(() => {
-    const unsub = adminService.subscribe((state) => {
+    const unsubAuth = adminService.subscribe((state) => {
       setAuthState(state);
     });
-    return () => unsub();
+    const unsubDiag = adminService.subscribeDiagnostic((diag) => {
+      setLiveDiagnostic(diag);
+    });
+    const unsubPost = adminService.subscribePostDiagnostic((diag) => {
+      setLivePostDiagnostic(diag);
+    });
+    return () => {
+      unsubAuth();
+      unsubDiag();
+      unsubPost();
+    };
   }, []);
+
+  // Trigger diagnostic RPC check once on mount if in DEV
+  useEffect(() => {
+    if (authState.isAuthenticated && (import.meta as any).env?.DEV) {
+      adminService.checkIsAdminRpc('panel-mount');
+    }
+  }, [authState.isAuthenticated]);
 
   // Fetch pending items and notifications count
   useEffect(() => {
@@ -90,6 +116,12 @@ export function AdminControlPanel({ onBackToApp }: AdminControlPanelProps) {
 
   const handleLogout = async () => {
     await adminService.logout();
+  };
+
+  const handleManualRpcCheck = async () => {
+    setIsRefreshingRpc(true);
+    await adminService.checkIsAdminRpc('manual-refresh-button');
+    setIsRefreshingRpc(false);
   };
 
   const navItems: { id: AdminTab; label: string; icon: any; badge?: number; badgeColor?: string }[] = [
@@ -251,7 +283,90 @@ export function AdminControlPanel({ onBackToApp }: AdminControlPanelProps) {
         )}
 
         {/* Main Admin Workspace View */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-4">
+          {/* Development-Only is_admin() Live Diagnostic Bar */}
+          {typeof window !== 'undefined' && (import.meta as any).env?.DEV && (
+            <div className="bg-[#0B1511] border border-[#234235] rounded-2xl p-4 shadow-lg text-xs space-y-2.5" dir="ltr">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <div className="flex items-center gap-2 text-[#D4AF37] font-mono font-semibold">
+                  <Terminal className="w-4 h-4 text-[#D4AF37]" />
+                  <span>is_admin() Live RPC Diagnostic (DEV ONLY)</span>
+                </div>
+                <button
+                  onClick={handleManualRpcCheck}
+                  disabled={isRefreshingRpc}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#162B22] hover:bg-[#1E3B2E] border border-[#2B493B] text-[11px] font-mono text-[#A8C2B3] hover:text-white transition disabled:opacity-50"
+                  title="Test is_admin() RPC now"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRefreshingRpc ? 'animate-spin' : ''}`} />
+                  <span>Test RPC</span>
+                </button>
+              </div>
+
+              {liveDiagnostic ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 font-mono text-[11px]">
+                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5">
+                    <span className="text-[#6E8E7E] block text-[10px]">authenticatedUserId</span>
+                    <span className="text-[#8AD8B0] font-semibold break-all">
+                      {liveDiagnostic.authenticatedUserId || 'null'}
+                    </span>
+                  </div>
+
+                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5">
+                    <span className="text-[#6E8E7E] block text-[10px]">RPC Status & Result</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-white font-bold">HTTP {liveDiagnostic.rpcHttpStatus ?? 'null'}</span>
+                      <span className="text-[#6E8E7E]">|</span>
+                      <span className={liveDiagnostic.isAdmin ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
+                        isAdmin: {String(liveDiagnostic.isAdmin)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5">
+                    <span className="text-[#6E8E7E] block text-[10px]">adminProfileId & Role</span>
+                    <div className="text-[#D4AF37] font-semibold truncate">
+                      {liveDiagnostic.adminRole || 'null'}
+                    </div>
+                    <span className="text-[10px] text-[#A8C2B3] truncate block">
+                      ID: {liveDiagnostic.adminProfileId || 'null'}
+                    </span>
+                  </div>
+
+                  <div className="bg-black/40 p-2.5 rounded-xl border border-white/5">
+                    <span className="text-[#6E8E7E] block text-[10px]">isActive & Context</span>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className={liveDiagnostic.isActive === true || liveDiagnostic.isActive === 'true' ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+                        isActive: {String(liveDiagnostic.isActive)}
+                      </span>
+                      <span className="text-[10px] text-[#6E8E7E] truncate">
+                        [{liveDiagnostic.context}]
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-400 font-mono text-[11px]">
+                  No RPC test run yet. Click "Test RPC" or perform an action to inspect is_admin().
+                </p>
+              )}
+
+              {livePostDiagnostic && livePostDiagnostic.httpStatus && livePostDiagnostic.httpStatus >= 400 && (
+                <div className="bg-red-950/40 border border-red-900/50 rounded-xl p-2.5 space-y-1 font-mono text-[11px]">
+                  <div className="flex items-center justify-between text-red-400 font-semibold">
+                    <span>Latest POST Error: {livePostDiagnostic.endpoint} ({livePostDiagnostic.method})</span>
+                    <span>HTTP {livePostDiagnostic.httpStatus}</span>
+                  </div>
+                  <div className="text-red-200 text-[10px] break-all bg-black/40 p-1.5 rounded">
+                    {typeof livePostDiagnostic.responseBody === 'object'
+                      ? JSON.stringify(livePostDiagnostic.responseBody)
+                      : String(livePostDiagnostic.responseBody)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'dashboard' && (
             <AdminDashboardView onNavigate={(tab) => setActiveTab(tab)} />
           )}

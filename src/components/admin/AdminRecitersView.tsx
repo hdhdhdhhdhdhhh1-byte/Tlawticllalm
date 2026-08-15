@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminService } from '../../services/AdminService';
+import { adminService, IsAdminRpcDiagnostic, PostRequestDiagnostic } from '../../services/AdminService';
 import {
   Users,
   UserPlus,
@@ -15,7 +15,8 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Star
+  Star,
+  Terminal
 } from 'lucide-react';
 
 export function AdminRecitersView() {
@@ -39,6 +40,8 @@ export function AdminRecitersView() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [modalRpcDiagnostic, setModalRpcDiagnostic] = useState<IsAdminRpcDiagnostic | null>(null);
+  const [modalPostDiagnostic, setModalPostDiagnostic] = useState<PostRequestDiagnostic | null>(null);
 
   const loadReciters = async () => {
     setIsLoading(true);
@@ -69,6 +72,7 @@ export function AdminRecitersView() {
     setIsFeatured(false);
     setIsPublished(true);
     setFormError(null);
+    setModalRpcDiagnostic(null);
     setIsModalOpen(true);
   };
 
@@ -85,6 +89,7 @@ export function AdminRecitersView() {
     setIsFeatured(reciter.is_featured ?? false);
     setIsPublished(reciter.is_published ?? true);
     setFormError(null);
+    setModalRpcDiagnostic(null);
     setIsModalOpen(true);
   };
 
@@ -101,6 +106,8 @@ export function AdminRecitersView() {
 
     setIsSaving(true);
     setFormError(null);
+    setModalRpcDiagnostic(null);
+    setModalPostDiagnostic(null);
 
     try {
       if (editingReciter) {
@@ -135,6 +142,10 @@ export function AdminRecitersView() {
       await loadReciters();
     } catch (err: any) {
       setFormError(err.message || 'فشلت عملية حفظ بيانات القارئ');
+      const latestRpc = adminService.getLatestRpcDiagnostic();
+      if (latestRpc) setModalRpcDiagnostic(latestRpc);
+      const latestPost = adminService.getLatestPostDiagnostic();
+      if (latestPost) setModalPostDiagnostic(latestPost);
     } finally {
       setIsSaving(false);
     }
@@ -398,9 +409,80 @@ export function AdminRecitersView() {
             </div>
 
             {formError && (
-              <div className="p-3 bg-red-950/70 border border-red-800 rounded-xl text-xs text-red-200 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span>{formError}</span>
+              <div className="space-y-2">
+                <div className="p-3 bg-red-950/70 border border-red-800 rounded-xl text-xs text-red-200 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <span>{formError}</span>
+                </div>
+
+                {/* Development-only RPC & POST Diagnostic details */}
+                {typeof window !== 'undefined' && (import.meta as any).env?.DEV && (modalPostDiagnostic || modalRpcDiagnostic) && (
+                  <div className="p-3 bg-[#0D1813] border border-[#2E5242] rounded-xl space-y-2 text-xs font-mono" dir="ltr">
+                    <div className="flex items-center justify-between text-[#D4AF37] text-[11px] font-semibold">
+                      <div className="flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5" />
+                        <span>POST /rest/v1/reciters Live Diagnostic</span>
+                      </div>
+                      <span className="text-[10px] text-[#6E8E7E]">
+                        {modalPostDiagnostic?.timestamp || modalRpcDiagnostic?.timestamp}
+                      </span>
+                    </div>
+
+                    {modalPostDiagnostic && (
+                      <div className="bg-black/60 p-2.5 rounded-lg border border-red-900/40 space-y-1.5 text-[11px]">
+                        <div className="text-red-400 font-bold border-b border-white/5 pb-1 flex justify-between">
+                          <span>Endpoint: {modalPostDiagnostic.endpoint} ({modalPostDiagnostic.method})</span>
+                          <span>HTTP {modalPostDiagnostic.httpStatus ?? 'ERR'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[#6E8E7E] block text-[10px]">PostgREST Response Body:</span>
+                          <pre className="text-red-200 bg-red-950/40 p-1.5 rounded border border-red-900/30 overflow-x-auto whitespace-pre-wrap break-all text-[10px]">
+                            {typeof modalPostDiagnostic.responseBody === 'object'
+                              ? JSON.stringify(modalPostDiagnostic.responseBody, null, 2)
+                              : String(modalPostDiagnostic.responseBody)}
+                          </pre>
+                        </div>
+                        <div className="flex justify-between text-[10px] pt-1 text-[#8AD8B0] border-t border-white/5">
+                          <span>isAdmin Before POST: {String(modalPostDiagnostic.isAdminBeforePost)}</span>
+                          <span>isAdmin After POST: {String(modalPostDiagnostic.isAdminAfterPost)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {modalRpcDiagnostic && (
+                      <div className="bg-black/50 p-2 rounded-lg border border-white/5 space-y-1 text-[11px] text-[#A8C2B3]">
+                        <div className="flex justify-between py-0.5 border-b border-white/5">
+                          <span className="text-[#6E8E7E]">authenticatedUserId:</span>
+                          <span className="text-[#8AD8B0] break-all">{modalRpcDiagnostic.authenticatedUserId || 'null'}</span>
+                        </div>
+                        <div className="flex justify-between py-0.5 border-b border-white/5">
+                          <span className="text-[#6E8E7E]">rpcHttpStatus:</span>
+                          <span className="text-white font-bold">{modalRpcDiagnostic.rpcHttpStatus ?? 'null'}</span>
+                        </div>
+                        <div className="flex justify-between py-0.5 border-b border-white/5">
+                          <span className="text-[#6E8E7E]">rpcResponse:</span>
+                          <span className="text-white font-bold">{JSON.stringify(modalRpcDiagnostic.rpcResponse)}</span>
+                        </div>
+                        <div className="flex justify-between py-0.5 border-b border-white/5">
+                          <span className="text-[#6E8E7E]">isAdmin:</span>
+                          <span className={modalRpcDiagnostic.isAdmin ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
+                            {String(modalRpcDiagnostic.isAdmin)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between py-0.5 border-b border-white/5">
+                          <span className="text-[#6E8E7E]">adminRole:</span>
+                          <span className="text-[#D4AF37] font-semibold">{modalRpcDiagnostic.adminRole || 'null'}</span>
+                        </div>
+                        <div className="flex justify-between py-0.5">
+                          <span className="text-[#6E8E7E]">isActive:</span>
+                          <span className={modalRpcDiagnostic.isActive === true || modalRpcDiagnostic.isActive === 'true' ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+                            {String(modalRpcDiagnostic.isActive)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

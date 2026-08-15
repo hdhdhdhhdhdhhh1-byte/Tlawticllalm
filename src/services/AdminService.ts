@@ -24,6 +24,29 @@ export interface AdminAuthDiagnostic {
   profilesFoundCount?: number;
 }
 
+export interface IsAdminRpcDiagnostic {
+  context: string;
+  timestamp: string;
+  authenticatedUserId: string | null;
+  rpcHttpStatus: number | null;
+  rpcResponse: any;
+  isAdmin: boolean;
+  adminProfileId: string | null;
+  adminRole: string | null;
+  isActive: boolean | string | number | null;
+}
+
+export interface PostRequestDiagnostic {
+  endpoint: string;
+  method: string;
+  httpStatus: number | null;
+  responseBody: any;
+  authenticatedUserId: string | null;
+  isAdminBeforePost: boolean | null;
+  isAdminAfterPost: boolean | null;
+  timestamp: string;
+}
+
 const ADMIN_STORAGE_KEY = 'tilawatak_admin_session';
 
 class AdminServiceImpl {
@@ -34,6 +57,10 @@ class AdminServiceImpl {
   };
 
   private listeners: Set<(state: AdminAuthState) => void> = new Set();
+  private diagnosticListeners: Set<(diag: IsAdminRpcDiagnostic | null) => void> = new Set();
+  private postDiagnosticListeners: Set<(diag: PostRequestDiagnostic | null) => void> = new Set();
+  private latestRpcDiagnostic: IsAdminRpcDiagnostic | null = null;
+  private latestPostDiagnostic: PostRequestDiagnostic | null = null;
 
   constructor() {
     this.restoreSession();
@@ -120,23 +147,66 @@ class AdminServiceImpl {
     return headers;
   }
 
+  subscribeDiagnostic(listener: (diag: IsAdminRpcDiagnostic | null) => void) {
+    this.diagnosticListeners.add(listener);
+    listener(this.latestRpcDiagnostic);
+    return () => {
+      this.diagnosticListeners.delete(listener);
+    };
+  }
+
+  private notifyDiagnosticListeners() {
+    this.diagnosticListeners.forEach((l) => l(this.latestRpcDiagnostic));
+  }
+
+  getLatestRpcDiagnostic(): IsAdminRpcDiagnostic | null {
+    return this.latestRpcDiagnostic;
+  }
+
+  subscribePostDiagnostic(listener: (diag: PostRequestDiagnostic | null) => void) {
+    this.postDiagnosticListeners.add(listener);
+    listener(this.latestPostDiagnostic);
+    return () => {
+      this.postDiagnosticListeners.delete(listener);
+    };
+  }
+
+  private notifyPostDiagnosticListeners() {
+    this.postDiagnosticListeners.forEach((l) => l(this.latestPostDiagnostic));
+  }
+
+  getLatestPostDiagnostic(): PostRequestDiagnostic | null {
+    return this.latestPostDiagnostic;
+  }
+
   // ============================================================================
   // DIAGNOSTICS
   // ============================================================================
 
   /**
    * Development-only diagnostic calling the public RPC is_admin() using the current access token.
-   * Logs strictly non-sensitive fields: status, response, user ID, boolean result.
+   * Logs and stores strictly non-sensitive fields: status, response, user ID, boolean result.
    */
   async checkIsAdminRpc(context: string = 'diagnostic'): Promise<boolean | null> {
     if (typeof window === 'undefined' || !(import.meta as any).env?.DEV) return null;
+    const admin = this.authState.admin;
+    const authUserId = admin?.id || null;
+
     if (!this.authState.token) {
-      console.log(`[is_admin Diagnostic - ${context}]`, {
+      const diag: IsAdminRpcDiagnostic = {
+        context,
+        timestamp: new Date().toLocaleTimeString('ar-SA'),
+        authenticatedUserId: authUserId,
         rpcHttpStatus: null,
         rpcResponse: 'No token in session',
-        authenticatedUserId: this.authState.admin?.id || null,
-        isAdmin: false
-      });
+        isAdmin: false,
+        adminProfileId: admin?.id || null,
+        adminRole: admin?.role || null,
+        isActive: admin?.isActive ?? null
+      };
+      this.latestRpcDiagnostic = diag;
+      this.notifyDiagnosticListeners();
+      console.log(`[is_admin Diagnostic - ${context}]`, diag);
       return false;
     }
 
@@ -162,21 +232,40 @@ class AdminServiceImpl {
 
       const isAdmin = rpcResponse === true || rpcResponse === 'true';
 
-      console.log(`[is_admin Diagnostic - ${context}]`, {
+      const diag: IsAdminRpcDiagnostic = {
+        context,
+        timestamp: new Date().toLocaleTimeString('ar-SA'),
+        authenticatedUserId: authUserId,
         rpcHttpStatus,
         rpcResponse,
-        authenticatedUserId: this.authState.admin?.id || null,
-        isAdmin
-      });
+        isAdmin,
+        adminProfileId: admin?.id || null,
+        adminRole: admin?.role || null,
+        isActive: admin?.isActive ?? null
+      };
+
+      this.latestRpcDiagnostic = diag;
+      this.notifyDiagnosticListeners();
+
+      console.log(`[is_admin Diagnostic - ${context}]`, diag);
 
       return isAdmin;
     } catch (e: any) {
-      console.warn(`[is_admin Diagnostic - ${context}] Error calling RPC is_admin:`, {
+      const diag: IsAdminRpcDiagnostic = {
+        context,
+        timestamp: new Date().toLocaleTimeString('ar-SA'),
+        authenticatedUserId: authUserId,
         rpcHttpStatus: null,
         rpcResponse: e?.message || 'Network error',
-        authenticatedUserId: this.authState.admin?.id || null,
-        isAdmin: false
-      });
+        isAdmin: false,
+        adminProfileId: admin?.id || null,
+        adminRole: admin?.role || null,
+        isActive: admin?.isActive ?? null
+      };
+      this.latestRpcDiagnostic = diag;
+      this.notifyDiagnosticListeners();
+
+      console.warn(`[is_admin Diagnostic - ${context}] Error calling RPC is_admin:`, diag);
       return null;
     }
   }
@@ -600,11 +689,43 @@ class AdminServiceImpl {
   // ============================================================================
 
   async getAllAdminReciters(): Promise<any[]> {
-    const res = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/reciters?select=*&order=created_at.desc`, {
-      headers: this.getAuthHeaders()
+    const url = `${SUPABASE_CONFIG.restBaseUrl}/reciters?select=*&order=created_at.desc`;
+    const authHeaders = this.getAuthHeaders();
+
+    if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+      console.log('[GET /reciters Diagnostic Before Request]', {
+        url,
+        hasAuthorizationHeader: !!authHeaders['Authorization'],
+        headers: Object.keys(authHeaders)
+      });
+    }
+
+    const res = await fetch(url, {
+      headers: authHeaders
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+
+    if (!res.ok) {
+      if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+        console.error('[GET /reciters Failed]', {
+          status: res.status,
+          statusText: res.statusText
+        });
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+      console.log('[GET /reciters Diagnostic After Request]', {
+        url,
+        httpStatus: res.status,
+        recordsCount: Array.isArray(data) ? data.length : 0,
+        responseBody: data
+      });
+    }
+
+    return data;
   }
 
   async createReciter(data: {
@@ -619,15 +740,32 @@ class AdminServiceImpl {
     isFeatured: boolean;
     isPublished: boolean;
   }): Promise<any> {
+    let isAdminBefore: boolean | null = null;
+    let rpcHttpStatusBefore: number | null = null;
+
+    const authenticatedUserId = this.authState.admin?.id || null;
+    const hasAccessToken = !!this.authState.token;
+
     if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
-      await this.checkIsAdminRpc('before-POST-reciters');
+      isAdminBefore = await this.checkIsAdminRpc('before-POST-reciters');
+      const latestRpc = this.getLatestRpcDiagnostic();
+      rpcHttpStatusBefore = latestRpc?.rpcHttpStatus ?? null;
+
+      console.log('AUTH CONTEXT BEFORE INSERT', {
+        authenticatedUserId,
+        hasAccessToken,
+        rpcHttpStatus: rpcHttpStatusBefore,
+        rpcIsAdmin: isAdminBefore
+      });
     }
+
+    const authHeaders = this.getAuthHeaders();
 
     const res = await fetch(`${SUPABASE_CONFIG.restBaseUrl}/reciters`, {
       method: 'POST',
       headers: {
-        ...this.getAuthHeaders(),
-        Prefer: 'return=representation'
+        ...authHeaders,
+        Prefer: 'return=minimal'
       },
       body: JSON.stringify({
         display_name: data.displayName,
@@ -642,14 +780,34 @@ class AdminServiceImpl {
         is_published: data.isPublished
       })
     });
+
     if (!res.ok) {
-      if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
-        await this.checkIsAdminRpc(`POST-reciters-failed-HTTP-${res.status}`);
+      let errBody: any = null;
+      try {
+        errBody = await res.json();
+      } catch {
+        errBody = await res.text().catch(() => null);
       }
-      throw new Error(`Failed to create reciter (HTTP ${res.status})`);
+
+      const errorMsg =
+        errBody?.message ||
+        errBody?.msg ||
+        errBody?.error_description ||
+        `Failed to create reciter (HTTP ${res.status})`;
+
+      throw new Error(errorMsg);
     }
-    const json = await res.json();
-    return json[0];
+
+    const text = await res.text();
+    if (!text || text.trim() === '') {
+      return { success: true };
+    }
+    try {
+      const json = JSON.parse(text);
+      return Array.isArray(json) ? json[0] : json;
+    } catch {
+      return { success: true };
+    }
   }
 
   async updateReciter(
